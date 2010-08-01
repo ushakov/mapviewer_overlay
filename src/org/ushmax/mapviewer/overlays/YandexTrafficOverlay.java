@@ -24,7 +24,7 @@ import android.graphics.PointF;
 import android.graphics.Rect;
 import android.util.Log;
 
-class YandexTrafficOverlay extends Overlay {
+public class YandexTrafficOverlay extends Overlay {
   private static final int tileSize = 256;
   private static final String BASE = "http://trf.maps.yandex.net/tiles?l=trf";
   private YandexReference myref = new YandexReference();
@@ -227,4 +227,13 @@ class YandexTrafficOverlay extends Overlay {
     return false;
   }
 
+  @Override
+  public String name() {
+    return "yandex_traffic";
+  }
+
+  @Override
+  public void free() {
+    cache.clear();
+  }
 }

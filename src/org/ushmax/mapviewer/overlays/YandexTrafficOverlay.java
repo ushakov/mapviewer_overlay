@@ -3,11 +3,15 @@
  */
 package org.ushmax.mapviewer.overlays;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
 
+import org.nativeutils.NativeUtils;
+import org.ushmax.common.BufferAllocator;
+import org.ushmax.common.ByteArraySlice;
+import org.ushmax.common.ByteVector;
+import org.ushmax.common.Logger;
 import org.ushmax.mapviewer.MercatorReference;
 import org.ushmax.mapviewer.MyMath;
 import org.ushmax.mapviewer.Overlay;
@@ -22,11 +26,11 @@ import android.graphics.Paint;
 import android.graphics.Point;
 import android.graphics.PointF;
 import android.graphics.Rect;
-import android.util.Log;
 
 public class YandexTrafficOverlay extends Overlay {
+  private static final Logger logger = Logger.getLogger(YandexTrafficOverlay.class);
   private static final int tileSize = 256;
-  private static final String BASE = "http://trf.maps.yandex.net/tiles?l=trf";
+  private static final String BASE = "http://jgo.maps.yandex.net/tiles?l=trf";
   private YandexReference myref = new YandexReference();
   private PointF centerGeo = new PointF();
   private Point originY = new Point();
@@ -37,7 +41,7 @@ public class YandexTrafficOverlay extends Overlay {
   private TaskDispatcher taskDispatcher;
   private long cacheRenewalTime = 0;
   private String cacheCookieValue = null;
-  
+
   private class YandexTileInfo {
     int google_x;
     int google_y;
@@ -49,7 +53,7 @@ public class YandexTrafficOverlay extends Overlay {
   public YandexTrafficOverlay(TaskDispatcher taskDispatcher) {
     this.taskDispatcher = taskDispatcher;
   }
-  
+
   @Override
   public void draw(Canvas canvas, int zoom, Point origin,
       Point size) {
@@ -150,7 +154,7 @@ public class YandexTrafficOverlay extends Overlay {
 
       public String toString() {
         return "YandexTrafficOverlay.getTile(" +
-            info.yandex_x + "," + info.yandex_y + "@" + info.zoom + ")";
+        info.yandex_x + "," + info.yandex_y + "@" + info.zoom + ")";
       }
     });
   }
@@ -162,6 +166,9 @@ public class YandexTrafficOverlay extends Overlay {
         getNewCookie();
       }
       cookie = cacheCookieValue;
+    }
+    if (cookie == null) {
+      return;
     }
     Bitmap ret = doGetTile(info.yandex_x, info.yandex_y, info.zoom, cookie);
     if (ret == null) {
@@ -177,8 +184,8 @@ public class YandexTrafficOverlay extends Overlay {
       cache.put(k, entry);
     }
     onLayerUpdate(new Rect(info.google_x, info.google_y,
-                           info.google_x + 256, info.google_y + 256),
-                  info.zoom);
+        info.google_x + 256, info.google_y + 256),
+        info.zoom);
   }
 
   private Bitmap doGetTile(int x, int y, int zoom, String cookie) {
@@ -188,38 +195,49 @@ public class YandexTrafficOverlay extends Overlay {
     url.append("&y=").append(y);
     url.append("&z=").append(zoom);
     url.append("&tm=").append(cookie);
-    Log.d("yandex", "loading: " + url.toString());
-    final ByteArrayOutputStream urlContent = getURLContent(url.toString());
-    if (urlContent == null) {
+    logger.debug("loading: " + url.toString());
+    ByteArraySlice tile = getURLContent(url.toString());
+    if (tile == null) {
       return null;
     }
-    byte[] content = urlContent.toByteArray();
-    return BitmapFactory.decodeByteArray(content, 0, content.length);
+    Bitmap bitmap = BitmapFactory.decodeByteArray(tile.data, tile.start, tile.count);
+    BufferAllocator.free(tile);
+    return bitmap;
   }
 
   private void getNewCookie() {
-      final String str = getURLContent("http://trf.maps.yandex.net/trf/stat.js").toString();
-      int start = str.indexOf("timestamp:");
-      start = str.indexOf("\"", start) + 1;
-      int end = str.indexOf("\"", start);
-      cacheCookieValue= str.substring(start, end);
-      Log.d("yandex", "got cookie: " + cacheCookieValue);
+    ByteArraySlice statData = getURLContent("http://jgo.maps.yandex.net/trf/stat.js");
+    if (statData == null) {
+      logger.error("cannot refresh cookie");
+      return;
+    }
+    String statString = NativeUtils.decodeUtf8(statData.data, statData.start, statData.count);
+    BufferAllocator.free(statData);
+    int start = statString.indexOf("timestamp:");
+    start = statString.indexOf("\"", start) + 1;
+    int end = statString.indexOf("\"", start);
+    cacheCookieValue = statString.substring(start, end);
+    logger.debug("got cookie: " + cacheCookieValue);
   }
 
-  private ByteArrayOutputStream getURLContent(final String url) {
+  private ByteArraySlice getURLContent(final String url) {
+    ByteArraySlice buffer = BufferAllocator.alloc(16384, "YandexTrafficOverlay.getUrlContent");
     try {
       InputStream inStream = new URL(url).openStream();
-      ByteArrayOutputStream outStream = new ByteArrayOutputStream();
-      byte[] buf = new byte[8192];
+      ByteVector outStream = new ByteVector();
       while (true) {
-        int numBytes = inStream.read(buf);
+        int numBytes = inStream.read(buffer.data, buffer.start, buffer.count);
         if (numBytes < 0) break;
-        outStream.write(buf, 0, numBytes);
+        outStream.append(buffer.data, buffer.start, numBytes);
       }
-      return outStream;
+      inStream.close();
+      return outStream.compact();
     } catch (IOException e) {
+      logger.error("Error occured during fetching url " + url + ": " + e);
       return null;
-    } 
+    } finally {
+      BufferAllocator.free(buffer);
+    }
   }
 
   @Override

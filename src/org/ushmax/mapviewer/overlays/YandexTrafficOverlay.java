@@ -11,7 +11,9 @@ import org.nativeutils.NativeUtils;
 import org.ushmax.common.BufferAllocator;
 import org.ushmax.common.ByteArraySlice;
 import org.ushmax.common.ByteVector;
+import org.ushmax.common.ImageUtils;
 import org.ushmax.common.Logger;
+import org.ushmax.mapviewer.MapViewer;
 import org.ushmax.mapviewer.MercatorReference;
 import org.ushmax.mapviewer.MyMath;
 import org.ushmax.mapviewer.Overlay;
@@ -26,21 +28,23 @@ import android.graphics.Paint;
 import android.graphics.Point;
 import android.graphics.PointF;
 import android.graphics.Rect;
+import android.os.Message;
 
 public class YandexTrafficOverlay extends Overlay {
   private static final Logger logger = Logger.getLogger(YandexTrafficOverlay.class);
   private static final int tileSize = 256;
   private static final String BASE = "http://jgo.maps.yandex.net/tiles?l=trf";
+  private static final String COOKIE_LOADING = "__LOADING__";
   private YandexReference myref = new YandexReference();
   private PointF centerGeo = new PointF();
   private Point originY = new Point();
   private Paint paint = new Paint();
-  private TaggedBitmapCache<String> cache = new TaggedBitmapCache<String>(20);
-  private StringBuilder lookupKey = new StringBuilder();
-  private StringBuilder url = new StringBuilder();
+  private TaggedBitmapCache<String> cache;
   private TaskDispatcher taskDispatcher;
-  private long cacheRenewalTime = 0;
+  private int cookieUpdateInterval;
+  // protected by this
   private String cacheCookieValue = null;
+  private long cacheRenewalTime = 0;
 
   private class YandexTileInfo {
     int google_x;
@@ -51,12 +55,20 @@ public class YandexTrafficOverlay extends Overlay {
   }
 
   public YandexTrafficOverlay(TaskDispatcher taskDispatcher) {
+    cache = new TaggedBitmapCache<String>(25);
     this.taskDispatcher = taskDispatcher;
+    cookieUpdateInterval = 120000; // in ms
   }
 
   @Override
   public void draw(Canvas canvas, int zoom, Point origin,
       Point size) {
+    String cookie = checkCookie();
+    // Don't load tiles if we don't have good cookie.
+    if (cookie == null || cookie == COOKIE_LOADING) {
+      return;
+    }
+    
     // This is mostly copied from TileView.drawRect()
     MercatorReference.toGeo(origin.x + size.x / 2, origin.y + size.y / 2, zoom,
         centerGeo);
@@ -77,7 +89,7 @@ public class YandexTrafficOverlay extends Overlay {
         info.yandex_x = px;
         info.yandex_y = py;
         info.zoom = zoom;
-        prefetchTile(info);
+        prefetchTile(info, cookie);
       }
     }
 
@@ -95,10 +107,11 @@ public class YandexTrafficOverlay extends Overlay {
   }
 
   private Bitmap getTile(int x, int y, int zoom) {
+    StringBuilder lookupKey = new StringBuilder();
+    lookupKey.append(x).append('|').append(y).append('|').append(zoom);
+    String key = lookupKey.toString(); 
     synchronized (cache) {
-      lookupKey.setLength(0);
-      lookupKey.append(x).append('|').append(y).append('|').append(zoom);
-      final TaggedBitmap entry = cache.get(lookupKey.toString());
+      final TaggedBitmap entry = cache.get(key);
       if (entry == null) { 
         return null; 
       }
@@ -106,40 +119,48 @@ public class YandexTrafficOverlay extends Overlay {
     }
   }
 
-  private boolean checkCookie() {
+  private String checkCookie() {
+    long now = System.currentTimeMillis();
+    boolean needLoadCookie = false;
+    String cookie;
     synchronized (this) {
-      long now = System.currentTimeMillis();
-      if (now - cacheRenewalTime > 60000) {
-        cacheRenewalTime = now;
-        cacheCookieValue = null;
-        return true;
+      if (now - cacheRenewalTime > cookieUpdateInterval  && cacheCookieValue != COOKIE_LOADING) {
+        cacheCookieValue = COOKIE_LOADING;
+        needLoadCookie = true;
       }
-      return false;
+      cookie = cacheCookieValue;
     }
+    if (needLoadCookie) {
+      taskDispatcher.addTask(TaskType.NETWORK, new Task() {
+        public void execute() {
+          getNewCookie();
+        }
+
+        public String toString() {
+          return "YandexTrafficOverlay.getNewCookie";
+        }
+      });
+    }
+    return cookie;
   }
 
-  private void prefetchTile(final YandexTileInfo info) {
+  private void prefetchTile(final YandexTileInfo info, String cookie) {
+    StringBuilder lookupKey = new StringBuilder();
+    lookupKey.append(info.yandex_x).append('|').append(info.yandex_y).append('|').append(info.zoom);
+    final String key = lookupKey.toString();
     boolean haveThisKey = false;
-    final String key;
-    checkCookie();
     synchronized (cache) {
-      lookupKey.setLength(0);
-      lookupKey.append(info.yandex_x).append('|').append(info.yandex_y).append('|').append(info.zoom);
       // If entry is already in cache, the tile is already there or is being
       // loaded.
-      key = lookupKey.toString();
       haveThisKey = cache.hasKey(key);
       if (haveThisKey) {
         final TaggedBitmap entry = cache.get(key);
         if (entry == null ||
-            entry.tag.equals(cacheCookieValue)) {
+            entry.tag.equals(cookie)) {
           // We only return here if the cache entry is not expired.
           return;
         }
-      }
-    }
-    synchronized (cache) {
-      if (!haveThisKey) {
+      } else {
         // Add an entry into cache to mark that tile is being loaded.
         // If we already have this key it means that we are refetching a new
         // tile after cache expiry, so don't remove the previous version until
@@ -162,22 +183,20 @@ public class YandexTrafficOverlay extends Overlay {
   protected void fetchTile(YandexTileInfo info) {
     String cookie;
     synchronized (this) {
-      if (cacheCookieValue == null) {
-        getNewCookie();
-      }
       cookie = cacheCookieValue;
     }
-    if (cookie == null) {
+    if (cookie == null || cookie == COOKIE_LOADING) {
+      // Cookie is either obsolete or being loaded right now.
       return;
     }
     Bitmap ret = doGetTile(info.yandex_x, info.yandex_y, info.zoom, cookie);
     if (ret == null) {
       return;
     }
+    StringBuilder lookupKey = new StringBuilder();
+    lookupKey.append(info.yandex_x).append('|').append(info.yandex_y).append('|').append(info.zoom);
+    final String k = lookupKey.toString();
     synchronized (cache) {
-      lookupKey.setLength(0);
-      lookupKey.append(info.yandex_x).append('|').append(info.yandex_y).append('|').append(info.zoom);
-      String k = lookupKey.toString();
       TaggedBitmap entry = new TaggedBitmap();
       entry.bitmap = ret;
       entry.tag = cookie;
@@ -189,7 +208,7 @@ public class YandexTrafficOverlay extends Overlay {
   }
 
   private Bitmap doGetTile(int x, int y, int zoom, String cookie) {
-    url.setLength(0);
+    StringBuilder url = new StringBuilder();
     url.append(BASE);
     url.append("&x=").append(x);
     url.append("&y=").append(y);
@@ -200,15 +219,29 @@ public class YandexTrafficOverlay extends Overlay {
     if (tile == null) {
       return null;
     }
+    if (!ImageUtils.mayBeImage(tile)) {
+      BufferAllocator.free(tile);
+      logger.debug("Broken image at " + url.toString());
+      return null;
+    }
     Bitmap bitmap = BitmapFactory.decodeByteArray(tile.data, tile.start, tile.count);
     BufferAllocator.free(tile);
     return bitmap;
   }
 
   private void getNewCookie() {
+    logger.debug("Fetching new cookie");
+    long now = System.currentTimeMillis();
     ByteArraySlice statData = getURLContent("http://jgo.maps.yandex.net/trf/stat.js");
     if (statData == null) {
-      logger.error("cannot refresh cookie");
+      logger.error("Error occured during fetching cookie");
+      synchronized (this) {
+        cacheCookieValue = null;
+        cacheRenewalTime = now;
+      }
+      Message msg = applicationCallback.obtainMessage();
+      msg.what = MapViewer.CMD_UPDATE;
+      applicationCallback.sendMessage(msg);
       return;
     }
     String statString = NativeUtils.decodeUtf8(statData.data, statData.start, statData.count);
@@ -216,12 +249,20 @@ public class YandexTrafficOverlay extends Overlay {
     int start = statString.indexOf("timestamp:");
     start = statString.indexOf("\"", start) + 1;
     int end = statString.indexOf("\"", start);
-    cacheCookieValue = statString.substring(start, end);
-    logger.debug("got cookie: " + cacheCookieValue);
+    String newCookie = statString.substring(start, end);
+    logger.debug("got cookie: " + newCookie);
+    synchronized (this) {
+      cacheCookieValue = newCookie;
+      cacheRenewalTime = now;
+    }
+    Message msg = applicationCallback.obtainMessage();
+    msg.what = MapViewer.CMD_UPDATE;
+    applicationCallback.sendMessage(msg);
   }
 
   private ByteArraySlice getURLContent(final String url) {
     ByteArraySlice buffer = BufferAllocator.alloc(16384, "YandexTrafficOverlay.getUrlContent");
+    long start = System.currentTimeMillis();
     try {
       InputStream inStream = new URL(url).openStream();
       ByteVector outStream = new ByteVector();
@@ -231,6 +272,8 @@ public class YandexTrafficOverlay extends Overlay {
         outStream.append(buffer.data, buffer.start, numBytes);
       }
       inStream.close();
+      int time = (int) (System.currentTimeMillis() - start);
+      logger.debug("Downloaded " + outStream.getTotalSize() + " bytes in " + time + " ms");
       return outStream.compact();
     } catch (IOException e) {
       logger.error("Error occured during fetching url " + url + ": " + e);

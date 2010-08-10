@@ -1,27 +1,26 @@
 package org.ushmax.mapviewer;
 
+import org.ushmax.common.Factory;
+import org.ushmax.common.Registry;
 import org.ushmax.mapviewer.overlays.YandexTrafficOverlay;
-
-import android.content.SharedPreferences;
-import android.content.res.Resources;
 
 public class Plugin implements AbstractPlugin {
 
   public void onLoad(ObjectManager manager) {
-    OverlayRegistry registry = manager.overlayRegistry;
-    registry.registerOverlayFactory(new OverlayFactory() {
+    Registry<Overlay, ObjectManager> registry = manager.overlayRegistry;
+    registry.register(new Factory<Overlay, ObjectManager>() {
       public String name() {
         return "yandex_traffic";
       }
 
-      public Overlay createOverlay(ObjectManager manager, SharedPreferences prefs, Resources resources) {
+      public Overlay create(ObjectManager manager) {
         return new YandexTrafficOverlay(manager.taskDispatcher);
       }
     });
   }
 
   public void onUnLoad(ObjectManager manager) {
-    OverlayRegistry registry = manager.overlayRegistry;
-    registry.unregisterOverlayFactory("yandex_traffic");
+    Registry<Overlay, ObjectManager> registry = manager.overlayRegistry;
+    registry.unregister("yandex_traffic");
   }
 }

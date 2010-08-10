@@ -1,7 +1,5 @@
 package org.ushmax.mapviewer.overlays;
 
-import org.ushmax.mapviewer.MyMath;
-
 import android.graphics.Point;
 import android.graphics.PointF;
 import android.util.Log;
@@ -51,14 +49,5 @@ public class YandexReference {
     final double scale = Math.pow(2, zoom) * 256;
     result.y = (int)(scale * py);
     result.x = (int)((lng + 180) / 360 * scale);
-  }
-  
-  public float metersToPixels(float distance, float lat, float lng, int zoom) {
-    double equator = 2 * Math.PI * MyMath.RADIUS_EARTH_METERS;
-    double lat_rad = lat * Math.PI / 360;
-    double dist_lng = distance / (equator * Math.cos(lat_rad)); 
-    float px = (float) (256 * dist_lng);
-    px *= Math.pow(2, zoom);
-    return px;
   }
 }

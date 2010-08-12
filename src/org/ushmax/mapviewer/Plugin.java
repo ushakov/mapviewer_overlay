@@ -8,11 +8,7 @@ public class Plugin implements AbstractPlugin {
 
   public void onLoad(ObjectManager manager) {
     Registry<Overlay, ObjectManager> registry = manager.overlayRegistry;
-    registry.register(new Factory<Overlay, ObjectManager>() {
-      public String name() {
-        return "yandex_traffic";
-      }
-
+    registry.register("yandex_traffic", new Factory<Overlay, ObjectManager>() {
       public Overlay create(ObjectManager manager) {
         return new YandexTrafficOverlay(manager.taskDispatcher);
       }

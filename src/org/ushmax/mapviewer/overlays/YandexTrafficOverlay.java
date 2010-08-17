@@ -19,6 +19,7 @@ import org.ushmax.mapviewer.Overlay;
 import org.ushmax.mapviewer.Task;
 import org.ushmax.mapviewer.TaskDispatcher;
 import org.ushmax.mapviewer.TaskType;
+import org.ushmax.mapviewer.UiController;
 
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -28,7 +29,7 @@ import android.graphics.Point;
 import android.graphics.PointF;
 import android.graphics.Rect;
 
-public class YandexTrafficOverlay extends Overlay {
+public class YandexTrafficOverlay implements Overlay {
   private static final Logger logger = Logger.getLogger(YandexTrafficOverlay.class);
   private static final int tileSize = 256;
   private static final String BASE = "http://jgo.maps.yandex.net/tiles?l=trf";
@@ -43,6 +44,8 @@ public class YandexTrafficOverlay extends Overlay {
   // protected by this
   private String cacheCookieValue = null;
   private long cacheRenewalTime = 0;
+  private UiController uiController;
+  private ILayerUpdateCallback layerUpdateCallback;
 
   private class YandexTileInfo {
     int google_x;
@@ -52,15 +55,15 @@ public class YandexTrafficOverlay extends Overlay {
     int zoom;
   }
 
-  public YandexTrafficOverlay(TaskDispatcher taskDispatcher) {
-    cache = new TaggedBitmapCache<String>(25);
+  public YandexTrafficOverlay(TaskDispatcher taskDispatcher, UiController uiController, ILayerUpdateCallback layerUpdateCallback) {
     this.taskDispatcher = taskDispatcher;
+    this.uiController = uiController;
+    this.layerUpdateCallback = layerUpdateCallback;
+    cache = new TaggedBitmapCache<String>(25);
     cookieUpdateInterval = 120000; // in ms
   }
 
-  @Override
-  public void draw(Canvas canvas, int zoom, Point origin,
-      Point size) {
+  public void draw(Canvas canvas, int zoom, Point origin, Point size) {
     String cookie = checkCookie();
     // Don't load tiles if we don't have good cookie.
     if (cookie == null || cookie == COOKIE_LOADING) {
@@ -200,6 +203,7 @@ public class YandexTrafficOverlay extends Overlay {
       entry.tag = cookie;
       cache.put(k, entry);
     }
+    layerUpdateCallback.
     onLayerUpdate(new Rect(info.google_x, info.google_y,
         info.google_x + 256, info.google_y + 256),
         info.zoom);
@@ -277,17 +281,14 @@ public class YandexTrafficOverlay extends Overlay {
     }
   }
 
-  @Override
   public boolean onTap(Point where, Point origin, int zoom) {
     return false;
   }
 
-  @Override
   public String name() {
     return "yandex_traffic";
   }
 
-  @Override
   public void free() {
     cache.clear();
   }

@@ -13,7 +13,6 @@ import org.ushmax.common.ByteArraySlice;
 import org.ushmax.common.ByteVector;
 import org.ushmax.common.ImageUtils;
 import org.ushmax.common.Logger;
-import org.ushmax.mapviewer.MapViewer;
 import org.ushmax.mapviewer.MercatorReference;
 import org.ushmax.mapviewer.MyMath;
 import org.ushmax.mapviewer.Overlay;
@@ -28,7 +27,6 @@ import android.graphics.Paint;
 import android.graphics.Point;
 import android.graphics.PointF;
 import android.graphics.Rect;
-import android.os.Message;
 
 public class YandexTrafficOverlay extends Overlay {
   private static final Logger logger = Logger.getLogger(YandexTrafficOverlay.class);
@@ -239,9 +237,7 @@ public class YandexTrafficOverlay extends Overlay {
         cacheCookieValue = null;
         cacheRenewalTime = now;
       }
-      Message msg = applicationCallback.obtainMessage();
-      msg.what = MapViewer.CMD_UPDATE;
-      applicationCallback.sendMessage(msg);
+      uiController.invalidate();
       return;
     }
     String statString = NativeUtils.decodeUtf8(statData.data, statData.start, statData.count);
@@ -255,9 +251,7 @@ public class YandexTrafficOverlay extends Overlay {
       cacheCookieValue = newCookie;
       cacheRenewalTime = now;
     }
-    Message msg = applicationCallback.obtainMessage();
-    msg.what = MapViewer.CMD_UPDATE;
-    applicationCallback.sendMessage(msg);
+    uiController.invalidate();
   }
 
   private ByteArraySlice getURLContent(final String url) {

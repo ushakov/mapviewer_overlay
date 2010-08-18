@@ -45,7 +45,6 @@ public class YandexTrafficOverlay implements Overlay {
   private String cacheCookieValue = null;
   private long cacheRenewalTime = 0;
   private UiController uiController;
-  private ILayerUpdateCallback layerUpdateCallback;
 
   private class YandexTileInfo {
     int google_x;
@@ -55,10 +54,9 @@ public class YandexTrafficOverlay implements Overlay {
     int zoom;
   }
 
-  public YandexTrafficOverlay(TaskDispatcher taskDispatcher, UiController uiController, ILayerUpdateCallback layerUpdateCallback) {
+  public YandexTrafficOverlay(TaskDispatcher taskDispatcher, UiController uiController) {
     this.taskDispatcher = taskDispatcher;
     this.uiController = uiController;
-    this.layerUpdateCallback = layerUpdateCallback;
     cache = new TaggedBitmapCache<String>(25);
     cookieUpdateInterval = 120000; // in ms
   }
@@ -203,8 +201,7 @@ public class YandexTrafficOverlay implements Overlay {
       entry.tag = cookie;
       cache.put(k, entry);
     }
-    layerUpdateCallback.
-    onLayerUpdate(new Rect(info.google_x, info.google_y,
+    uiController.onUpdate(new Rect(info.google_x, info.google_y,
         info.google_x + 256, info.google_y + 256),
         info.zoom);
   }

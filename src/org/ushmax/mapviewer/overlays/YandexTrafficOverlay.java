@@ -13,6 +13,10 @@ import org.ushmax.common.ByteArraySlice;
 import org.ushmax.common.ByteVector;
 import org.ushmax.common.ImageUtils;
 import org.ushmax.common.Logger;
+import org.ushmax.common.LoggerFactory;
+import org.ushmax.geometry.GeoPoint;
+import org.ushmax.geometry.Point;
+import org.ushmax.geometry.Rectangle;
 import org.ushmax.mapviewer.MercatorReference;
 import org.ushmax.mapviewer.MyMath;
 import org.ushmax.mapviewer.Overlay;
@@ -25,17 +29,14 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Paint;
-import android.graphics.Point;
-import android.graphics.PointF;
-import android.graphics.Rect;
 
 public class YandexTrafficOverlay implements Overlay {
-  private static final Logger logger = Logger.getLogger(YandexTrafficOverlay.class);
+  private static final Logger logger = LoggerFactory.getLogger(YandexTrafficOverlay.class);
   private static final int tileSize = 256;
   private static final String BASE = "http://jgo.maps.yandex.net/tiles?l=trf";
   private static final String COOKIE_LOADING = "__LOADING__";
   private YandexReference myref = new YandexReference();
-  private PointF centerGeo = new PointF();
+  private GeoPoint centerGeo = new GeoPoint();
   private Point originY = new Point();
   private Paint paint = new Paint();
   private TaggedBitmapCache<String> cache;
@@ -71,7 +72,7 @@ public class YandexTrafficOverlay implements Overlay {
     // This is mostly copied from TileView.drawRect()
     MercatorReference.toGeo(origin.x + size.x / 2, origin.y + size.y / 2, zoom,
         centerGeo);
-    myref.fromGeo(centerGeo.x, centerGeo.y, zoom, originY);
+    myref.fromGeo(centerGeo.lat, centerGeo.lng, zoom, originY);
     originY.x -= size.x / 2;
     originY.y -= size.y / 2;
 
@@ -201,7 +202,7 @@ public class YandexTrafficOverlay implements Overlay {
       entry.tag = cookie;
       cache.put(k, entry);
     }
-    uiController.onUpdate(new Rect(info.google_x, info.google_y,
+    uiController.onUpdate(new Rectangle(info.google_x, info.google_y,
         info.google_x + 256, info.google_y + 256),
         info.zoom);
   }

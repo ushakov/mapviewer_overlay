@@ -1,7 +1,8 @@
 package org.ushmax.mapviewer.overlays;
 
-import android.graphics.Point;
-import android.graphics.PointF;
+import org.ushmax.geometry.GeoPoint;
+import org.ushmax.geometry.Point;
+
 import android.util.Log;
 
 public class YandexReference {
@@ -14,7 +15,7 @@ public class YandexReference {
   public YandexReference() {
   }
   
-  public void toGeo(int x, int y, int zoom, PointF resultf) {
+  public void toGeo(int x, int y, int zoom, GeoPoint resultf) {
     double px = x;
     double py = y;
     final double scale = Math.pow(2, zoom);
@@ -36,8 +37,8 @@ public class YandexReference {
                 / (Math.exp(2 * dy) * Math.pow(1 + EXCENTR * Math.sin(prev), EXCENTR)));
     }
 
-    resultf.x = (float)(iter * 180 / Math.PI);
-    resultf.y = (float)lng;
+    resultf.lat = (float)(iter * 180 / Math.PI);
+    resultf.lng = (float)lng;
   }
 
   public void fromGeo(float lat, float lng, int zoom, Point result) {

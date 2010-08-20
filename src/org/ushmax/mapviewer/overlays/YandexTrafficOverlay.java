@@ -19,9 +19,9 @@ import org.ushmax.common.TaskDispatcher;
 import org.ushmax.common.TaskType;
 import org.ushmax.geometry.GeoPoint;
 import org.ushmax.geometry.MercatorReference;
+import org.ushmax.geometry.MyMath;
 import org.ushmax.geometry.Point;
 import org.ushmax.geometry.Rectangle;
-import org.ushmax.mapviewer.MyMath;
 import org.ushmax.mapviewer.Overlay;
 import org.ushmax.mapviewer.UiController;
 

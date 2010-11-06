@@ -14,8 +14,7 @@ import org.ushmax.common.ByteVector;
 import org.ushmax.common.ImageUtils;
 import org.ushmax.common.Logger;
 import org.ushmax.common.LoggerFactory;
-import org.ushmax.common.Task;
-import org.ushmax.common.TaskDispatcher;
+import org.ushmax.common.ITaskDispatcher;
 import org.ushmax.common.TaskType;
 import org.ushmax.geometry.GeoPoint;
 import org.ushmax.geometry.MercatorReference;
@@ -40,7 +39,7 @@ public class YandexTrafficOverlay implements Overlay {
   private Point originY = new Point();
   private Paint paint = new Paint();
   private TaggedBitmapCache<String> cache;
-  private TaskDispatcher taskDispatcher;
+  private ITaskDispatcher taskDispatcher;
   private int cookieUpdateInterval;
   // protected by this
   private String cacheCookieValue = null;
@@ -55,7 +54,7 @@ public class YandexTrafficOverlay implements Overlay {
     int zoom;
   }
 
-  public YandexTrafficOverlay(TaskDispatcher taskDispatcher, UiController uiController) {
+  public YandexTrafficOverlay(ITaskDispatcher taskDispatcher, UiController uiController) {
     this.taskDispatcher = taskDispatcher;
     this.uiController = uiController;
     cache = new TaggedBitmapCache<String>(25);
@@ -131,13 +130,10 @@ public class YandexTrafficOverlay implements Overlay {
       cookie = cacheCookieValue;
     }
     if (needLoadCookie) {
-      taskDispatcher.addTask(TaskType.NETWORK, new Task() {
-        public void execute() {
+      taskDispatcher.addTask(TaskType.NETWORK, new Runnable() {
+        @Override
+        public void run() {
           getNewCookie();
-        }
-
-        public String toString() {
-          return "YandexTrafficOverlay.getNewCookie";
         }
       });
     }
@@ -168,14 +164,10 @@ public class YandexTrafficOverlay implements Overlay {
         cache.put(key, null);
       }
     }
-    taskDispatcher.addTask(TaskType.NETWORK, new Task() {
-      public void execute() {
+    taskDispatcher.addTask(TaskType.NETWORK, new Runnable() {
+      @Override
+      public void run() {
         fetchTile(info);
-      }
-
-      public String toString() {
-        return "YandexTrafficOverlay.getTile(" +
-        info.yandex_x + "," + info.yandex_y + "@" + info.zoom + ")";
       }
     });
   }

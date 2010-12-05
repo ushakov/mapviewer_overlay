@@ -1,11 +1,12 @@
 package org.ushmax.mapviewer.overlays;
 
+import org.ushmax.common.Logger;
+import org.ushmax.common.LoggerFactory;
 import org.ushmax.geometry.GeoPoint;
 import org.ushmax.geometry.Point;
 
-import android.util.Log;
-
 public class YandexReference {
+  private static final Logger logger = LoggerFactory.getLogger(YandexReference.class);
   private static final long RADIUS_A = 6378137;
   private static final long RADIUS_B = 6356752;
   private static final double EPS = 1e-10;
@@ -30,7 +31,7 @@ public class YandexReference {
     double prev = -100;
 
     while (Math.abs(prev - iter) >= EPS) {
-      Log.d("test", "" + (prev-iter));
+      logger.debug("" + (prev-iter));
       prev = iter;
       iter = Math.asin(
             1 - ((1 + Math.sin(prev)) * Math.pow(1 - EXCENTR * Math.sin(prev), EXCENTR))

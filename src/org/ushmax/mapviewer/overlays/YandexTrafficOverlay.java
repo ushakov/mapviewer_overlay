@@ -13,6 +13,8 @@ import org.ushmax.common.Logger;
 import org.ushmax.common.LoggerFactory;
 import org.ushmax.common.Pair;
 import org.ushmax.fetcher.AsyncHttpFetcher;
+import org.ushmax.fetcher.HttpFetcher;
+import org.ushmax.fetcher.HttpFetcher.MHttpRequest;
 import org.ushmax.fetcher.HttpFetcher.NetworkException;
 import org.ushmax.geometry.EllipsoidCoordMapping;
 import org.ushmax.geometry.FastMercator;
@@ -135,7 +137,10 @@ public class YandexTrafficOverlay implements Overlay {
     }
     if (needLoadCookie) {
       logger.debug("Fetching new cookie");
-      httpFetcher.fetch("http://jgo.maps.yandex.net/trf/stat.js", 
+      MHttpRequest req = new MHttpRequest();
+      req.method = HttpFetcher.Method.GET;
+      req.url = "http://jgo.maps.yandex.net/trf/stat.js";
+      httpFetcher.fetch(req,
           new Callback<Pair<ByteArraySlice, NetworkException>>() {
             @Override
             public void run(Pair<ByteArraySlice, NetworkException> result) {
@@ -192,7 +197,10 @@ public class YandexTrafficOverlay implements Overlay {
     info.zoom = point.zoom;
     info.cookie = point.cookie;
     
-    httpFetcher.fetch(url, new Callback<Pair<ByteArraySlice, NetworkException>>(){
+    MHttpRequest req = new MHttpRequest();
+    req.method = HttpFetcher.Method.GET;
+    req.url = url;
+    httpFetcher.fetch(req, new Callback<Pair<ByteArraySlice, NetworkException>>(){
       @Override
       public void run(Pair<ByteArraySlice, NetworkException> result) {
         onReceiveTile(result, info, url);

@@ -45,7 +45,7 @@ public class YandexTrafficOverlay implements Overlay {
   private long cacheRenewalTime = 0;
   private UiController uiController;
 
-  private class YandexTileInfo {
+  private static class YandexTileInfo {
     int google_x;
     int google_y;
     int yandex_x;

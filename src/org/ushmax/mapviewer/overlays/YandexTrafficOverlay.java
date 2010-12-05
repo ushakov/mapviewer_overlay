@@ -31,7 +31,7 @@ public class YandexTrafficOverlay implements Overlay {
   private static final Logger logger = LoggerFactory.getLogger(YandexTrafficOverlay.class);
   private static final int tileSize = 256;
   private static final String BASE = "http://jgo.maps.yandex.net/tiles?l=trf";
-  private static final String COOKIE_LOADING = "__LOADING__";
+  private static final int COOKIE_LOADING = -1;
   private static final int HTTP_DEADLINE = 10000;
   private YandexReference yaRef = new YandexReference();
   private GeoPoint centerGeo = new GeoPoint();
@@ -41,7 +41,7 @@ public class YandexTrafficOverlay implements Overlay {
   private AsyncHttpFetcher httpFetcher;
   private int cookieUpdateInterval;
   // protected by this
-  private String cacheCookieValue = null;
+  private int cacheCookieValue = 0;
   private long cacheRenewalTime = 0;
   private UiController uiController;
 
@@ -52,7 +52,7 @@ public class YandexTrafficOverlay implements Overlay {
     int yandex_y;
     int zoom;
   }
-
+ 
   public YandexTrafficOverlay(AsyncHttpFetcher httpFetcher, UiController uiController) {
     this.httpFetcher = httpFetcher;
     this.uiController = uiController;
@@ -61,9 +61,9 @@ public class YandexTrafficOverlay implements Overlay {
   }
 
   public void draw(Canvas canvas, int zoom, Point origin, Point size) {
-    String cookie = checkCookie();
+    int cookie = checkCookie();
     // Don't load tiles if we don't have good cookie.
-    if (cookie == null || cookie == COOKIE_LOADING) {
+    if (cookie <= 0) {
       return;
     }
     
@@ -92,7 +92,7 @@ public class YandexTrafficOverlay implements Overlay {
     }
   }
 
-  private Bitmap getTile(int x, int y, int zoom, String cookie) {
+  private Bitmap getTile(int x, int y, int zoom, int cookie) {
     StringBuilder lookupKey = new StringBuilder();
     lookupKey.append(x).append('|').append(y).append('|').append(zoom);
     String key = lookupKey.toString();
@@ -106,7 +106,7 @@ public class YandexTrafficOverlay implements Overlay {
           return null;
         }
         // Return bitmap if the cache entry is not expired.
-        if (entry.tag.equals(cookie)) {
+        if (entry.tag == cookie) {
           return entry.bitmap;
         }
       }
@@ -117,10 +117,10 @@ public class YandexTrafficOverlay implements Overlay {
     return null;
   }
 
-  private String checkCookie() {
+  private int checkCookie() {
     long now = System.currentTimeMillis();
     boolean needLoadCookie = false;
-    String cookie;
+    int cookie;
     synchronized (this) {
       if (now - cacheRenewalTime > cookieUpdateInterval  && cacheCookieValue != COOKIE_LOADING) {
         cacheCookieValue = COOKIE_LOADING;
@@ -146,7 +146,7 @@ public class YandexTrafficOverlay implements Overlay {
     if (statData == null) {
       logger.error("Error occured during fetching cookie: " + result.second);
       synchronized (this) {
-        cacheCookieValue = null;
+        cacheCookieValue = 0;
         cacheRenewalTime = now;
       }
       uiController.invalidate();
@@ -157,8 +157,9 @@ public class YandexTrafficOverlay implements Overlay {
     int start = statString.indexOf("timestamp:");
     start = statString.indexOf("\"", start) + 1;
     int end = statString.indexOf("\"", start);
-    String newCookie = statString.substring(start, end);
-    logger.debug("got cookie: " + newCookie);
+    String newCookieStr = statString.substring(start, end);
+    logger.debug("got cookie: " + newCookieStr);
+    int newCookie = Integer.parseInt(newCookieStr);
     synchronized (this) {
       cacheCookieValue = newCookie;
       cacheRenewalTime = now;
@@ -166,7 +167,7 @@ public class YandexTrafficOverlay implements Overlay {
     uiController.invalidate();
   }
 
-  private void fetchTile(int x, int y, int zoom, final String cookie) {
+  private void fetchTile(int x, int y, int zoom, final int cookie) {
     StringBuilder urlBuilder = new StringBuilder();
     urlBuilder.append(BASE);
     urlBuilder.append("&x=").append(x);
@@ -192,7 +193,7 @@ public class YandexTrafficOverlay implements Overlay {
       }}, HTTP_DEADLINE);
   }
     
-  protected void onReceiveTile(Pair<ByteArraySlice, NetworkException> result, YandexTileInfo info, String url, String cookie) {
+  protected void onReceiveTile(Pair<ByteArraySlice, NetworkException> result, YandexTileInfo info, String url, int cookie) {
     ByteArraySlice tile = result.first;
     if (tile == null) {
       logger.info("Fetching tile failed: " + result.second);

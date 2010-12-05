@@ -10,7 +10,7 @@ public class Plugin implements AbstractPlugin {
     Registry<Overlay, ActivityData> registry = app.overlayRegistry;
     registry.register("yandex_traffic", new Factory<Overlay, ActivityData>() {
       public Overlay create(ActivityData activityData) {
-        return new YandexTrafficOverlay(app.taskDispatcher, activityData.uiController);
+        return new YandexTrafficOverlay(app.asyncHttpFetcher, activityData.uiController);
       }
     });
   }

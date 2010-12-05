@@ -4,6 +4,7 @@
 package org.ushmax.mapviewer.overlays;
 
 import org.nativeutils.NativeUtils;
+import org.ushmax.android.BitmapCache;
 import org.ushmax.common.BufferAllocator;
 import org.ushmax.common.ByteArraySlice;
 import org.ushmax.common.Callback;
@@ -37,7 +38,7 @@ public class YandexTrafficOverlay implements Overlay {
   private GeoPoint centerGeo = new GeoPoint();
   private Point originY = new Point();
   private Paint paint = new Paint();
-  private TaggedBitmapCache<String> cache;
+  private BitmapCache<Point4> cache;
   private AsyncHttpFetcher httpFetcher;
   private int cookieUpdateInterval;
   // protected by this
@@ -51,12 +52,13 @@ public class YandexTrafficOverlay implements Overlay {
     int yandex_x;
     int yandex_y;
     int zoom;
+    int cookie;
   }
  
   public YandexTrafficOverlay(AsyncHttpFetcher httpFetcher, UiController uiController) {
     this.httpFetcher = httpFetcher;
     this.uiController = uiController;
-    cache = new TaggedBitmapCache<String>(25);
+    cache = new BitmapCache<Point4>(25);
     cookieUpdateInterval = 120000; // in ms
   }
 
@@ -79,9 +81,15 @@ public class YandexTrafficOverlay implements Overlay {
     int rightTile = MyMath.div(originY.x + size.x + tileSize - 1, tileSize);
     int bottomTile = MyMath.div(originY.y + size.y + tileSize - 1, tileSize);
     
+    Point4 point = new Point4();
+    point.cookie = cookie;
+    point.zoom = zoom;
+    
     for (int y = topTile; y < bottomTile; y++) {
       for (int x = leftTile; x < rightTile; x++) {
-        Bitmap tile = getTile(x, y, zoom, cookie);
+        point.x = x;
+        point.y = y;
+        Bitmap tile = getTile(point);
         // getTile returns null on tiles that are not loaded yet.
         if (tile != null) {
           int tileLeft = x * tileSize - originY.x;
@@ -92,28 +100,23 @@ public class YandexTrafficOverlay implements Overlay {
     }
   }
 
-  private Bitmap getTile(int x, int y, int zoom, int cookie) {
-    StringBuilder lookupKey = new StringBuilder();
-    lookupKey.append(x).append('|').append(y).append('|').append(zoom);
-    String key = lookupKey.toString();
+  private Bitmap getTile(Point4 point) {
     synchronized (cache) {
       // If entry is already in cache, the tile is already there or is being
       // loaded.
-      if (cache.hasKey(key)) {
-        TaggedBitmap entry = cache.get(key);
+      if (cache.hasKey(point)) {
+        Bitmap entry = cache.get(point);
         // Null value indicates that tile is being loaded.
         if (entry == null) {
           return null;
         }
-        // Return bitmap if the cache entry is not expired.
-        if (entry.tag == cookie) {
-          return entry.bitmap;
-        }
+        return entry;
       }
       // Add a null entry into cache to mark that tile is being loaded.
-      cache.put(key, null);
+      Point4 pointCopy = new Point4(point);
+      cache.put(pointCopy, null);
     }
-    fetchTile(x, y, zoom, cookie);
+    fetchTile(point);
     return null;
   }
 
@@ -167,33 +170,34 @@ public class YandexTrafficOverlay implements Overlay {
     uiController.invalidate();
   }
 
-  private void fetchTile(int x, int y, int zoom, final int cookie) {
+  private void fetchTile(Point4 point) {
     StringBuilder urlBuilder = new StringBuilder();
     urlBuilder.append(BASE);
-    urlBuilder.append("&x=").append(x);
-    urlBuilder.append("&y=").append(y);
-    urlBuilder.append("&z=").append(zoom);
-    urlBuilder.append("&tm=").append(cookie);
+    urlBuilder.append("&x=").append(point.x);
+    urlBuilder.append("&y=").append(point.y);
+    urlBuilder.append("&z=").append(point.zoom);
+    urlBuilder.append("&tm=").append(point.cookie);
     final String url = urlBuilder.toString();
     final YandexTileInfo info = new YandexTileInfo();
     
     GeoPoint geo = new GeoPoint();
-    yaRef.toGeo(x * tileSize, y * tileSize, zoom, geo);
-    int zoomShift = 20 - zoom;
+    yaRef.toGeo(point.x * tileSize, point.y * tileSize, point.zoom, geo);
+    int zoomShift = 20 - point.zoom;
     info.google_x = FastMercator.projectLng((int)(geo.lng * 1e+7)) >> zoomShift;
     info.google_y = FastMercator.projectLat((int)(geo.lat * 1e+7)) >> zoomShift;
-    info.yandex_x = x;
-    info.yandex_y = y;
-    info.zoom = zoom;
+    info.yandex_x = point.x;
+    info.yandex_y = point.y;
+    info.zoom = point.zoom;
+    info.cookie = point.cookie;
     
     httpFetcher.fetch(url, new Callback<Pair<ByteArraySlice, NetworkException>>(){
       @Override
       public void run(Pair<ByteArraySlice, NetworkException> result) {
-        onReceiveTile(result, info, url, cookie);
+        onReceiveTile(result, info, url);
       }}, HTTP_DEADLINE);
   }
     
-  protected void onReceiveTile(Pair<ByteArraySlice, NetworkException> result, YandexTileInfo info, String url, int cookie) {
+  protected void onReceiveTile(Pair<ByteArraySlice, NetworkException> result, YandexTileInfo info, String url) {
     ByteArraySlice tile = result.first;
     if (tile == null) {
       logger.info("Fetching tile failed: " + result.second);
@@ -209,14 +213,9 @@ public class YandexTrafficOverlay implements Overlay {
     if (bitmap == null) {
       return;
     }
-    StringBuilder lookupKey = new StringBuilder();
-    lookupKey.append(info.yandex_x).append('|').append(info.yandex_y).append('|').append(info.zoom);
-    final String k = lookupKey.toString();
+    Point4 key = new Point4(info.yandex_x, info.yandex_y, info.zoom, info.cookie);
     synchronized (cache) {
-      TaggedBitmap entry = new TaggedBitmap();
-      entry.bitmap = bitmap;
-      entry.tag = cookie;
-      cache.put(k, entry);
+      cache.put(key, bitmap);
     }
     uiController.onUpdate(new Rectangle(info.google_x, info.google_y,
         info.google_x + 256, info.google_y + 256),

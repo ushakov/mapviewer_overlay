@@ -31,7 +31,7 @@ public class YandexReference {
     double prev = -100;
 
     while (Math.abs(prev - iter) >= EPS) {
-      logger.debug("" + (prev-iter));
+      //logger.debug("" + (prev-iter));
       prev = iter;
       iter = Math.asin(
             1 - ((1 + Math.sin(prev)) * Math.pow(1 - EXCENTR * Math.sin(prev), EXCENTR))

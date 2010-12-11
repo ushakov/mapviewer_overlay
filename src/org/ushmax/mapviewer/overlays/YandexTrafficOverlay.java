@@ -37,7 +37,7 @@ public class YandexTrafficOverlay implements Overlay {
   private static final int tileSize = 256;
   private static final String BASE = "http://jgo.maps.yandex.net/tiles?l=trf";
   private static final int COOKIE_LOADING = -1;
-  private static final int HTTP_DEADLINE = 10000;
+  private static final int HTTP_DEADLINE = 60000;
   private EllipsoidCoordMapping yaRef = new EllipsoidCoordMapping();
   private GeoPoint centerGeo = new GeoPoint();
   private Point originY = new Point();
